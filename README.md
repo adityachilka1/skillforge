@@ -10,7 +10,7 @@ Author, version, test, and publish skills your agents can install.
 
 </div>
 
-> **Early days.** Code drops in waves over the next few weeks. Star to follow along.
+> **Status — pre-alpha.** No working code yet. Star to follow the v0.1 milestone (target: Q3 2026). Pre-release issues + ideas welcome in Discussions.
 
 ---
 
