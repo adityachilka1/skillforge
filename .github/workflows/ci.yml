@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # pnpm 11.x uses node:sqlite which is Node 22+. Drop Node 20 until
+        # we pin pnpm@9 or Node 20 ships node:sqlite (whichever comes first).
+        node: [22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # Corepack reads the `packageManager` field in package.json and brings
+      # the matching pnpm version onto PATH — no version drift between local
+      # and CI. Runs AFTER setup-node because corepack needs Node.
+      - run: corepack enable pnpm
+        shell: bash
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build

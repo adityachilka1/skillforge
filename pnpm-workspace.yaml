@@ -1,0 +1,6 @@
+# pnpm 11+ moved settings out of package.json into this file.
+# allowBuilds pre-approves install scripts for these packages — otherwise
+# pnpm fails CI with ERR_PNPM_IGNORED_BUILDS.
+allowBuilds:
+  "@biomejs/biome": true
+  esbuild: true
