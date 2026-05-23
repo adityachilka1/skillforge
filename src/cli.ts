@@ -7,6 +7,7 @@
  *   lint <path>     surface style/quality warnings on a SKILL.md
  *   pack <dir>      bundle a skill directory into a .skill archive
  *   install <url>   download a remote .skill into ~/.claude/skills/
+ *   update <path>   bump the version field of a SKILL.md
  */
 import { cac } from "cac";
 import kleur from "kleur";
@@ -14,6 +15,7 @@ import { initSkill } from "./init.js";
 import { installSkill } from "./install.js";
 import { computeExitCode, lintSkill } from "./lint.js";
 import { packSkill } from "./pack.js";
+import { type BumpKind, updateSkillVersion } from "./update.js";
 import { validateSkill } from "./validate.js";
 
 const VERSION = "0.0.2";
@@ -137,6 +139,34 @@ cli
         `${prefix} ${result.skillName} → ${result.outDir} (${result.files.length} file${
           result.files.length === 1 ? "" : "s"
         }, ${sizeKb} KB${result.dryRun ? "; nothing written" : ""})\n`,
+      );
+      process.exit(0);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  });
+
+cli
+  .command("update <path>", "Bump the version field of a SKILL.md")
+  .option("--bump <kind>", "Bump direction: patch, minor, or major")
+  .option("--new-version <semver>", "Set the version to an explicit semver string")
+  .option("--dry-run", "Report the would-be new version without writing")
+  .action(async (path: string, opts) => {
+    try {
+      if (opts.bump !== undefined && !["patch", "minor", "major"].includes(opts.bump)) {
+        throw new Error(`--bump must be one of patch, minor, major (got "${opts.bump}")`);
+      }
+      const result = await updateSkillVersion({
+        path,
+        bump: opts.bump as BumpKind | undefined,
+        newVersion: opts.newVersion,
+        dryRun: !!opts.dryRun,
+      });
+      const prefix = result.dryRun ? kleur.yellow("dry-run") : kleur.green("✓");
+      const suffix = result.dryRun ? " (nothing written)" : "";
+      process.stdout.write(
+        `${prefix} ${result.path}: ${result.oldVersion} → ${result.newVersion}${suffix}\n`,
       );
       process.exit(0);
     } catch (err) {

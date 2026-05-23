@@ -9,4 +9,11 @@ export {
   type Severity,
 } from "./lint.js";
 export { SkillFrontmatterSchema, type SkillFrontmatter } from "./schema.js";
+export {
+  type BumpKind,
+  bumpVersion,
+  type UpdateOptions,
+  type UpdateResult,
+  updateSkillVersion,
+} from "./update.js";
 export { validateSkill, type ValidateResult } from "./validate.js";

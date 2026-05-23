@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, and `install` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, and `update` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -91,6 +91,20 @@ skillforge install https://example.com/code-review.skill
 ```
 
 Refuses plaintext `http://` (skills execute on your machine), refuses zip-slip entries, refuses symlinks in archives, caps downloads at 64 MB, and validates the bundle's `SKILL.md` before writing a single file to disk. Pass `--force` to clear an existing install directory before extracting; pass `--dry-run` to validate and report what would happen without touching the filesystem.
+
+### `skillforge update <path>`
+
+Bump the `version:` field of a SKILL.md without hand-editing the frontmatter. Accepts either a file path or a directory containing a `SKILL.md`:
+
+```bash
+skillforge update ./code-review --bump patch
+# ✓ ./code-review/SKILL.md: 0.1.0 → 0.1.1
+
+skillforge update ./code-review/SKILL.md --new-version 1.0.0
+# ✓ ./code-review/SKILL.md: 0.1.1 → 1.0.0
+```
+
+Pass exactly one of `--bump <patch|minor|major>` or `--new-version <semver>`. Pre-release tags (`-beta`, `-rc.1`, …) are dropped on any bump, matching `npm version`. A missing `version:` field is treated as `0.0.1` (the schema default) so a `patch` on a freshly-scaffolded skill produces `0.0.2`. The proposed frontmatter is validated against the schema before anything hits disk, and the write is line-surgical — body bytes, field order, and other YAML formatting are preserved byte-for-byte. Pass `--dry-run` to print the would-be new version without writing.
 
 ## Schema
 
