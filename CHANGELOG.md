@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## [Unreleased]
 
+### Added
+- `skillforge lint <path>`: warnings-first style/quality linter for `SKILL.md` files. A stricter peer of `validate` that surfaces nine smells `validate` deliberately ignores — short or noun-phrase `description`, descriptions missing trigger language, empty `tags`, stale `version: 0.0.1` files (older than 7 days), missing `## When to use` / `## Examples` headings, `TODO` markers (error), `you should` / `always` second-person phrasing, and trailing whitespace. Exit 0 if only warnings, 1 on errors, 2 with `--strict`. `--json` emits machine-readable issues. Each rule is a tiny pure function so adding rules is a one-liner.
+
 ## [0.0.2] — 2026-05-23
 
 ### Added
