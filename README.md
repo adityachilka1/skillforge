@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `pack`, and `install` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, and `install` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -51,6 +51,23 @@ Exits `0` on full validity, `1` on any issue. Drop into CI:
 
 ```yaml
 - run: npx @adityachilka/skillforge validate ./skills/*.md
+```
+
+### `skillforge lint <path>`
+
+A stricter peer of `validate`. Where `validate` checks the schema (hard pass/fail), `lint` surfaces style and quality smells — short or noun-phrase descriptions, missing trigger language, empty tags, stale `0.0.1` versions, missing `## When to use` / `## Examples` headings, residual `TODO`s, second-person prose, trailing whitespace:
+
+```bash
+skillforge lint ./code-review/SKILL.md
+# warnings (2)
+#   · ./code-review/SKILL.md: description-no-trigger: description should include triggering language…
+#   · ./code-review/SKILL.md: tags-empty: tags array is empty — add a few for discoverability
+```
+
+Exits `0` on warnings-only (advisory), `1` on any error (e.g. residual `TODO`), `2` with `--strict` if there's any issue at all. Pass `--json` for machine-readable output:
+
+```bash
+skillforge lint ./code-review/SKILL.md --strict --json
 ```
 
 ### `skillforge pack <dir>`

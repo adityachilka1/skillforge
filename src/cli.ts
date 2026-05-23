@@ -4,6 +4,7 @@
  * Commands:
  *   init <name>     scaffold a new SKILL.md
  *   validate <path> validate a SKILL.md file's frontmatter and body
+ *   lint <path>     surface style/quality warnings on a SKILL.md
  *   pack <dir>      bundle a skill directory into a .skill archive
  *   install <url>   download a remote .skill into ~/.claude/skills/
  */
@@ -11,6 +12,7 @@ import { cac } from "cac";
 import kleur from "kleur";
 import { initSkill } from "./init.js";
 import { installSkill } from "./install.js";
+import { computeExitCode, lintSkill } from "./lint.js";
 import { packSkill } from "./pack.js";
 import { validateSkill } from "./validate.js";
 
@@ -50,6 +52,47 @@ cli.command("validate <path>", "Validate a SKILL.md file").action(async (path: s
     process.exit(1);
   }
 });
+
+cli
+  .command("lint <path>", "Surface style/quality warnings on a SKILL.md")
+  .option("--strict", "Promote warnings to errors for the exit code")
+  .option("--json", "Emit machine-readable JSON instead of human output")
+  .action(async (path: string, opts) => {
+    try {
+      const result = await lintSkill(path);
+      const exitCode = computeExitCode(result, !!opts.strict);
+
+      if (opts.json) {
+        process.stdout.write(`${JSON.stringify(result.issues, null, 2)}\n`);
+        process.exit(exitCode);
+      }
+
+      if (result.issues.length === 0) {
+        process.stdout.write(`${kleur.green("✓")} ${result.path} — no lint issues\n`);
+        process.exit(exitCode);
+      }
+
+      const errors = result.issues.filter((i) => i.severity === "error");
+      const warnings = result.issues.filter((i) => i.severity === "warning");
+
+      const printGroup = (label: string, color: (s: string) => string, items: typeof errors) => {
+        if (items.length === 0) return;
+        process.stdout.write(`${color(label)}\n`);
+        for (const issue of items) {
+          const loc = issue.line ? `${result.path}:${issue.line}` : result.path;
+          process.stdout.write(`  ${color("·")} ${loc}: ${issue.rule}: ${issue.message}\n`);
+        }
+      };
+
+      printGroup(`errors (${errors.length})`, kleur.red, errors);
+      printGroup(`warnings (${warnings.length})`, kleur.yellow, warnings);
+
+      process.exit(exitCode);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  });
 
 cli
   .command("pack <dir>", "Bundle a skill directory into a .skill archive")
