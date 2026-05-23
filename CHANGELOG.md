@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- `skillforge update <path>`: bump the `version:` field of a SKILL.md in one shot — `--bump <patch|minor|major>` or `--new-version <semver>` (mutually exclusive, exactly one required). Pre-release tags (`-beta`, `-rc.1`, …) are dropped on any bump, matching `npm version`. A missing `version:` field is treated as the schema default of `0.0.1`. Validates the proposed frontmatter against the schema before touching disk and uses a line-surgical write so the body bytes and other YAML formatting are preserved byte-for-byte. `--dry-run` reports the new version without writing.
 - `skillforge lint <path>`: warnings-first style/quality linter for `SKILL.md` files. A stricter peer of `validate` that surfaces nine smells `validate` deliberately ignores — short or noun-phrase `description`, descriptions missing trigger language, empty `tags`, stale `version: 0.0.1` files (older than 7 days), missing `## When to use` / `## Examples` headings, `TODO` markers (error), `you should` / `always` second-person phrasing, and trailing whitespace. Exit 0 if only warnings, 1 on errors, 2 with `--strict`. `--json` emits machine-readable issues. Each rule is a tiny pure function so adding rules is a one-liner.
 
 ## [0.0.2] — 2026-05-23
