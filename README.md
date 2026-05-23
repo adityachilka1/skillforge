@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, and `update` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, and `format` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -105,6 +105,26 @@ skillforge update ./code-review/SKILL.md --new-version 1.0.0
 ```
 
 Pass exactly one of `--bump <patch|minor|major>` or `--new-version <semver>`. Pre-release tags (`-beta`, `-rc.1`, …) are dropped on any bump, matching `npm version`. A missing `version:` field is treated as `0.0.1` (the schema default) so a `patch` on a freshly-scaffolded skill produces `0.0.2`. The proposed frontmatter is validated against the schema before anything hits disk, and the write is line-surgical — body bytes, field order, and other YAML formatting are preserved byte-for-byte. Pass `--dry-run` to print the would-be new version without writing.
+
+### `skillforge format <path>`
+
+Reformat a `SKILL.md` to canonical shape — frontmatter keys in the schema's declared order (`name`, `description`, `version`, `tags`, `author`, `homepage`, then any passthrough fields alphabetized at the end), trailing whitespace stripped, runs of blank lines collapsed to two, exactly one trailing newline. Think `prettier` for the SKILL.md envelope: `lint` flags style smells, `format` fixes them.
+
+```bash
+skillforge format ./code-review/SKILL.md
+# ✓ formatted ./code-review/SKILL.md
+
+skillforge format ./code-review/SKILL.md --check
+# exits 1 if anything would change — useful in CI
+
+skillforge format ./code-review/SKILL.md --dry-run
+# dry-run ./code-review/SKILL.md (nothing written)
+
+skillforge format ./code-review/SKILL.md --write=false
+# prints the formatted result to stdout instead of writing
+```
+
+Fenced code blocks (` ``` `) are preserved verbatim — `format` is gentle on the body, never reflowing prose. The output is always validated against the schema before writing; an already-canonical file is a no-op (`exit 0`, no write). Format is idempotent: running twice produces byte-identical output the second time.
 
 ## Schema
 

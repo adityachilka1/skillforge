@@ -1,4 +1,5 @@
 /** Public programmatic API. */
+export { type FormatOptions, type FormatResult, formatSkill } from "./format.js";
 export { initSkill, type InitOptions } from "./init.js";
 export {
   computeExitCode,

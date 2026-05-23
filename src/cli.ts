@@ -8,9 +8,11 @@
  *   pack <dir>      bundle a skill directory into a .skill archive
  *   install <url>   download a remote .skill into ~/.claude/skills/
  *   update <path>   bump the version field of a SKILL.md
+ *   format <path>   reformat a SKILL.md to canonical shape
  */
 import { cac } from "cac";
 import kleur from "kleur";
+import { formatSkill } from "./format.js";
 import { initSkill } from "./init.js";
 import { installSkill } from "./install.js";
 import { computeExitCode, lintSkill } from "./lint.js";
@@ -168,6 +170,56 @@ cli
       process.stdout.write(
         `${prefix} ${result.path}: ${result.oldVersion} → ${result.newVersion}${suffix}\n`,
       );
+      process.exit(0);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  });
+
+cli
+  .command("format <path>", "Reformat a SKILL.md to canonical shape")
+  .option("--write", "Write the formatted result back (default: true; pass --write=false to skip)")
+  .option("--dry-run", "Compute the formatted result but write nothing")
+  .option("--check", "Exit 1 if the file would change; write nothing (CI mode)")
+  .action(async (path: string, opts) => {
+    try {
+      // `--check` is dry-run + a non-zero exit on changes. The CLI fans
+      // these flags out; the library API stays simple.
+      const isCheck = !!opts.check;
+      const dryRun = !!opts.dryRun || isCheck;
+      // cac parses `--write=false` to `false`; `--write` alone to `true`;
+      // absent to `undefined` (library default of true).
+      const writeOpt: boolean | undefined = opts.write;
+      const result = await formatSkill({
+        path,
+        write: writeOpt,
+        dryRun,
+      });
+      if (isCheck) {
+        if (result.changed) {
+          process.stdout.write(`${kleur.yellow("would-change")} ${result.path}\n`);
+          process.exit(1);
+        }
+        process.stdout.write(`${kleur.green("✓")} ${result.path} — already canonical\n`);
+        process.exit(0);
+      }
+      if (dryRun) {
+        const tag = result.changed ? kleur.yellow("dry-run") : kleur.green("✓");
+        const suffix = result.changed ? " (nothing written)" : " — already canonical";
+        process.stdout.write(`${tag} ${result.path}${suffix}\n`);
+        process.exit(0);
+      }
+      if (writeOpt === false) {
+        // Print the formatted output to stdout instead of writing.
+        process.stdout.write(result.after);
+        process.exit(0);
+      }
+      if (result.changed) {
+        process.stdout.write(`${kleur.green("✓")} formatted ${result.path}\n`);
+      } else {
+        process.stdout.write(`${kleur.green("✓")} ${result.path} — already canonical\n`);
+      }
       process.exit(0);
     } catch (err) {
       process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
