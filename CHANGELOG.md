@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- `skillforge install <url>`: download a remote `.skill` archive and extract it into `~/.claude/skills/<skill-name>` (override with `--out <dir>`). Refuses plaintext `http://` (skills execute on your machine), refuses zip-slip entries, refuses symlinks in archives, caps downloads at 64 MB, and validates the bundle's SKILL.md before writing a single file to disk. `--force` clears the target before extracting (no stale leftovers); `--dry-run` reports what would happen without touching the filesystem. Closes the symmetric pair with `pack`.
 - `skillforge pack <dir>`: bundle a skill directory into a `.skill` archive (zip) ready to drop into Claude / Cowork's "Save skill" install flow. Validates the SKILL.md before packing (skip with `--skip-validation`). Default output path is `<dirname>.skill` in the current working directory; override with `--out <file>`. Excludes `.git`, `node_modules`, hidden files, and `*.log` to keep bundles clean. Uses `jszip` (pure JS, no native deps).
 - This CHANGELOG file.
 

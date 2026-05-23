@@ -5,10 +5,12 @@
  *   init <name>     scaffold a new SKILL.md
  *   validate <path> validate a SKILL.md file's frontmatter and body
  *   pack <dir>      bundle a skill directory into a .skill archive
+ *   install <url>   download a remote .skill into ~/.claude/skills/
  */
 import { cac } from "cac";
 import kleur from "kleur";
 import { initSkill } from "./init.js";
+import { installSkill } from "./install.js";
 import { packSkill } from "./pack.js";
 import { validateSkill } from "./validate.js";
 
@@ -65,6 +67,33 @@ cli
         `${kleur.green("✓")} packed ${result.files.length} file${
           result.files.length === 1 ? "" : "s"
         } → ${result.outPath} (${sizeKb} KB)\n`,
+      );
+      process.exit(0);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  });
+
+cli
+  .command("install <url>", "Download a remote .skill archive and extract it")
+  .option("--out <dir>", "Install path (default: ~/.claude/skills/<skill-name>)")
+  .option("--force", "Overwrite an existing install directory")
+  .option("--dry-run", "Validate and report what would happen, but write nothing")
+  .action(async (url: string, opts) => {
+    try {
+      const result = await installSkill({
+        url,
+        outDir: opts.out,
+        force: !!opts.force,
+        dryRun: !!opts.dryRun,
+      });
+      const prefix = result.dryRun ? kleur.yellow("dry-run") : kleur.green("✓");
+      const sizeKb = (result.bytesWritten / 1024).toFixed(1);
+      process.stdout.write(
+        `${prefix} ${result.skillName} → ${result.outDir} (${result.files.length} file${
+          result.files.length === 1 ? "" : "s"
+        }, ${sizeKb} KB${result.dryRun ? "; nothing written" : ""})\n`,
       );
       process.exit(0);
     } catch (err) {
