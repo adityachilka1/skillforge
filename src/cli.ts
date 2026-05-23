@@ -14,7 +14,7 @@ import { installSkill } from "./install.js";
 import { packSkill } from "./pack.js";
 import { validateSkill } from "./validate.js";
 
-const VERSION = "0.0.1";
+const VERSION = "0.0.2";
 const cli = cac("skillforge");
 
 cli

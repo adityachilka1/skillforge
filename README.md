@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.1, early days.** `init` and `validate` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `pack`, and `install` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -53,6 +53,28 @@ Exits `0` on full validity, `1` on any issue. Drop into CI:
 - run: npx @adityachilka/skillforge validate ./skills/*.md
 ```
 
+### `skillforge pack <dir>`
+
+Bundle a skill directory into a `.skill` archive (a plain zip), ready to drop into Claude / Cowork's "Save skill" install flow:
+
+```bash
+skillforge pack ./code-review
+# ✓ packed 4 files → code-review.skill (3.2 KB)
+```
+
+Validates the `SKILL.md` before packing (skip with `--skip-validation`). Default output is `<dirname>.skill` in the current working directory — override with `--out <file>`. Excludes `.git`, `node_modules`, hidden files, and `*.log` to keep bundles clean. Pure-JS zipping via `jszip` — no native deps.
+
+### `skillforge install <url>`
+
+Download a remote `.skill` archive and extract it into `~/.claude/skills/<skill-name>` (override with `--out <dir>`):
+
+```bash
+skillforge install https://example.com/code-review.skill
+# ✓ code-review → ~/.claude/skills/code-review (4 files, 3.2 KB)
+```
+
+Refuses plaintext `http://` (skills execute on your machine), refuses zip-slip entries, refuses symlinks in archives, caps downloads at 64 MB, and validates the bundle's `SKILL.md` before writing a single file to disk. Pass `--force` to clear an existing install directory before extracting; pass `--dry-run` to validate and report what would happen without touching the filesystem.
+
 ## Schema
 
 ```yaml
@@ -74,7 +96,8 @@ Unknown frontmatter fields are preserved (forward-compatible with whatever Anthr
 
 ## Roadmap
 
-- **v0.0.1** — `init`, `validate` ✓ (this release)
+- **v0.0.1** — `init`, `validate` ✓
+- **v0.0.2** — `pack`, `install` ✓ (this release)
 - **v0.1** — `publish` to the skillforge.dev registry, eval suite, `install` from registry
 - **v0.2** — MCP-compatible installer so any MCP client can install skills from the registry
 
