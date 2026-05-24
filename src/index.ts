@@ -1,4 +1,13 @@
 /** Public programmatic API. */
+export {
+  type BodyHeadingsDiff,
+  type BodyLinesDelta,
+  type DiffResult,
+  diffSkills,
+  type FrontmatterChange,
+  type FrontmatterDiff,
+  type HeadingMove,
+} from "./diff.js";
 export { type FormatOptions, type FormatResult, formatSkill } from "./format.js";
 export { initSkill, type InitOptions } from "./init.js";
 export {

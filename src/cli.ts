@@ -10,9 +10,11 @@
  *   update <path>   bump the version field of a SKILL.md
  *   format <path>   reformat a SKILL.md to canonical shape
  *   inspect <path>  one-shot report: validation + lint + frontmatter + body
+ *   diff <a> <b>    structural comparison of two SKILL.md files
  */
 import { cac } from "cac";
 import kleur from "kleur";
+import { type DiffResult, diffSkills } from "./diff.js";
 import { formatSkill } from "./format.js";
 import { initSkill } from "./init.js";
 import { type InspectResult, inspectSkill } from "./inspect.js";
@@ -344,6 +346,112 @@ function printInspectReport(r: InspectResult): void {
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return `${s.slice(0, max - 1)}…`;
+}
+
+cli
+  .command("diff <a> <b>", "Structural diff of two SKILL.md files")
+  .option("--json", "Emit the full diff result as JSON (machine-readable)")
+  .action(async (a: string, b: string, opts) => {
+    try {
+      const result = await diffSkills(a, b);
+      if (opts.json) {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        process.exit(result.identical ? 0 : 1);
+      }
+      printDiffReport(result);
+      process.exit(result.identical ? 0 : 1);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      // Exit 2 for validation/IO failure, distinct from the "files differ"
+      // exit 1 — mirrors `mcp-devtools diff` convention so CI scripts can
+      // tell "noisy" from "broken".
+      process.exit(2);
+    }
+  });
+
+/**
+ * Human-readable `diff` report. A short summary header, then one section
+ * per kind of change (frontmatter, headings, body). Prose-oriented:
+ * paragraphs where the comparison is best read as a sentence, lists only
+ * where the items are genuinely parallel. Additions in green, removals in
+ * red, changes in yellow.
+ */
+function printDiffReport(r: DiffResult): void {
+  const out = process.stdout;
+  const heading = (label: string) => out.write(`\n${kleur.bold(kleur.dim(label.toUpperCase()))}\n`);
+
+  if (r.identical) {
+    out.write(
+      `${kleur.green("✓")} ${r.pathA} ${kleur.dim("≡")} ${r.pathB} ${kleur.dim("— structurally identical")}\n`,
+    );
+    return;
+  }
+
+  // Summary line — counts at a glance, full breakdown follows.
+  const fm = r.frontmatter;
+  const fmCount = Object.keys(fm.added).length + Object.keys(fm.removed).length + fm.changed.length;
+  const hd = r.bodyHeadings;
+  const hdCount = hd.added.length + hd.removed.length + hd.reordered.length;
+  out.write(
+    `${kleur.bold("diff")} ${kleur.dim(r.pathA)} ${kleur.dim("→")} ${kleur.dim(r.pathB)}\n`,
+  );
+  out.write(
+    `${kleur.dim("  frontmatter:")} ${fmCount}  ${kleur.dim("headings:")} ${hdCount}  ${kleur.dim("body lines:")} ${kleur.green(`+${r.bodyLinesDelta.added}`)} ${kleur.red(`-${r.bodyLinesDelta.removed}`)}\n`,
+  );
+
+  if (fmCount > 0) {
+    heading("Frontmatter");
+    for (const [k, v] of Object.entries(fm.added)) {
+      out.write(`  ${kleur.green("+")} ${k}: ${formatValue(v)}\n`);
+    }
+    for (const [k, v] of Object.entries(fm.removed)) {
+      out.write(`  ${kleur.red("-")} ${k}: ${formatValue(v)}\n`);
+    }
+    for (const c of fm.changed) {
+      out.write(
+        `  ${kleur.yellow("~")} ${c.key}: ${kleur.red(formatValue(c.before))} ${kleur.dim("→")} ${kleur.green(formatValue(c.after))}\n`,
+      );
+    }
+  }
+
+  if (hdCount > 0) {
+    heading("Headings");
+    for (const h of hd.added) {
+      out.write(`  ${kleur.green("+")} ${h}\n`);
+    }
+    for (const h of hd.removed) {
+      out.write(`  ${kleur.red("-")} ${h}\n`);
+    }
+    for (const m of hd.reordered) {
+      out.write(
+        `  ${kleur.yellow("~")} ${m.heading} ${kleur.dim(`(position ${m.from} → ${m.to})`)}\n`,
+      );
+    }
+  }
+
+  if (r.bodyLinesDelta.added > 0 || r.bodyLinesDelta.removed > 0) {
+    heading("Body");
+    out.write(
+      `  ${kleur.green(`+${r.bodyLinesDelta.added}`)}  ${kleur.red(`-${r.bodyLinesDelta.removed}`)}  ${kleur.dim("lines (coarse)")}\n`,
+    );
+  }
+}
+
+/**
+ * Render a frontmatter value as a short inline string. Arrays show as
+ * `[a, b]`; objects as JSON; long strings get truncated with an ellipsis
+ * so the diff stays scannable even with multi-line `description` fields.
+ */
+function formatValue(v: unknown): string {
+  if (v === undefined) return kleur.dim("∅");
+  if (v === null) return "null";
+  if (Array.isArray(v)) return `[${v.map((x) => formatValue(x)).join(", ")}]`;
+  if (typeof v === "string") {
+    const single = v.replace(/\s+/g, " ");
+    return single.length > 64 ? `${single.slice(0, 63)}…` : single;
+  }
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
 }
 
 cli.help();
