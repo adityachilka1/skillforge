@@ -9,11 +9,13 @@
  *   install <url>   download a remote .skill into ~/.claude/skills/
  *   update <path>   bump the version field of a SKILL.md
  *   format <path>   reformat a SKILL.md to canonical shape
+ *   inspect <path>  one-shot report: validation + lint + frontmatter + body
  */
 import { cac } from "cac";
 import kleur from "kleur";
 import { formatSkill } from "./format.js";
 import { initSkill } from "./init.js";
+import { type InspectResult, inspectSkill } from "./inspect.js";
 import { installSkill } from "./install.js";
 import { computeExitCode, lintSkill } from "./lint.js";
 import { packSkill } from "./pack.js";
@@ -226,6 +228,123 @@ cli
       process.exit(1);
     }
   });
+
+cli
+  .command(
+    "inspect <path>",
+    "One-shot report: validation + lint + frontmatter summary + body stats",
+  )
+  .option("--json", "Emit the full result as JSON (CI-friendly)")
+  .action(async (path: string, opts) => {
+    try {
+      const result = await inspectSkill({ path, json: !!opts.json });
+      if (opts.json) {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        process.exit(result.summary.ok ? 0 : 1);
+      }
+      printInspectReport(result);
+      process.exit(result.summary.ok ? 0 : 1);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * Human-readable `inspect` report. Tidy multi-section layout: a header, an
+ * aligned frontmatter table, body stats with tabular numerals, then any
+ * validation issues, lint issues, and the attached-file inventory. Each
+ * heading is sentence-case in tracked uppercase — quiet structural signal,
+ * not editorial shouting.
+ */
+function printInspectReport(r: InspectResult): void {
+  const out = process.stdout;
+  const status = r.summary.ok ? kleur.green("OK") : kleur.red("ISSUES");
+  const heading = (label: string) => out.write(`\n${kleur.bold(kleur.dim(label.toUpperCase()))}\n`);
+
+  out.write(`${kleur.bold(r.name ?? "<unparsed>")}  ${kleur.dim(r.path)}  ${status}\n`);
+
+  heading("Frontmatter");
+  if (r.frontmatter) {
+    const rows: Array<[string, string]> = [
+      ["name", r.frontmatter.name],
+      ["description", truncate(r.frontmatter.description.replace(/\s+/g, " "), 64)],
+      ["version", r.frontmatter.version],
+      ["tags", r.frontmatter.tags.length ? r.frontmatter.tags.join(", ") : kleur.dim("∅")],
+    ];
+    if (r.frontmatter.author) rows.push(["author", r.frontmatter.author]);
+    if (r.frontmatter.homepage) rows.push(["homepage", r.frontmatter.homepage]);
+    const keyWidth = Math.max(...rows.map((row) => row[0].length));
+    for (const [k, v] of rows) {
+      out.write(`  ${kleur.dim(k.padEnd(keyWidth))}  ${v}\n`);
+    }
+  } else {
+    out.write(`  ${kleur.dim("(unparseable — see validation issues below)")}\n`);
+  }
+
+  heading("Body");
+  // tabular-nums analogue: right-align the numbers in a fixed column so the
+  // eye can compare them at a glance.
+  const stats: Array<[string, number]> = [
+    ["lines", r.body.lines],
+    ["words", r.body.words],
+    ["characters", r.body.characters],
+    ["sections", r.body.sections.length],
+  ];
+  const valWidth = Math.max(...stats.map(([, n]) => String(n).length));
+  for (const [label, n] of stats) {
+    out.write(`  ${String(n).padStart(valWidth)}  ${kleur.dim(label)}\n`);
+  }
+  if (r.body.sections.length > 0) {
+    out.write(`  ${kleur.dim("headings:")}\n`);
+    for (const section of r.body.sections) {
+      out.write(`    ${kleur.dim("·")} ${section}\n`);
+    }
+  }
+
+  heading("Validation");
+  if (r.validation.ok) {
+    out.write(`  ${kleur.green("✓")} no issues\n`);
+  } else {
+    for (const issue of r.validation.issues) {
+      out.write(`  ${kleur.red("·")} ${issue}\n`);
+    }
+  }
+
+  heading("Lint");
+  if (r.lint.issues.length === 0) {
+    out.write(`  ${kleur.green("✓")} no issues\n`);
+  } else {
+    for (const issue of r.lint.issues) {
+      const color = issue.severity === "error" ? kleur.red : kleur.yellow;
+      const loc = issue.line ? `${r.path}:${issue.line}` : r.path;
+      out.write(
+        `  ${color("·")} ${color(issue.severity)} ${loc}: ${issue.rule}: ${issue.message}\n`,
+      );
+    }
+  }
+
+  if (r.attachedFiles) {
+    heading("Attached files");
+    if (r.attachedFiles.length === 0) {
+      out.write(`  ${kleur.dim("(none)")}\n`);
+    } else {
+      for (const f of r.attachedFiles) {
+        out.write(`  ${kleur.dim("·")} ${f}\n`);
+      }
+    }
+  }
+
+  heading("Summary");
+  out.write(
+    `  ${r.summary.ok ? kleur.green("✓") : kleur.red("✗")} validation: ${r.summary.validationIssues}  lint: ${r.summary.lintIssues}\n`,
+  );
+}
+
+function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
 
 cli.help();
 cli.version(VERSION);
