@@ -46,6 +46,22 @@ export interface PackResult {
 const DEFAULT_EXCLUDES = new Set([".git", "node_modules", ".DS_Store"]);
 
 /**
+ * The exclusion rule used by `packSkill` when walking a skill directory.
+ * Exported so siblings (e.g. `inspect`) can show users the same file inventory
+ * the packer would produce, without duplicating the rule.
+ *
+ * Returns `true` for entries that should be skipped: `.git`, `node_modules`,
+ * `.DS_Store`, anything ending in `.log`, and any hidden dotfile.
+ */
+export function shouldExcludeEntry(name: string): boolean {
+  if (DEFAULT_EXCLUDES.has(name)) return true;
+  if (name.endsWith(".log")) return true;
+  // Hidden files at any depth — keep VCS / editor cruft out of bundles.
+  if (name.startsWith(".")) return true;
+  return false;
+}
+
+/**
  * Walks `srcDir`, zips every non-excluded file into a `.skill` archive, and
  * writes it to disk. Returns the on-disk path and an inventory.
  */
@@ -113,9 +129,5 @@ async function walk(
 }
 
 function shouldExclude(name: string): boolean {
-  if (DEFAULT_EXCLUDES.has(name)) return true;
-  if (name.endsWith(".log")) return true;
-  // Hidden files at any depth — keep VCS / editor cruft out of bundles.
-  if (name.startsWith(".")) return true;
-  return false;
+  return shouldExcludeEntry(name);
 }

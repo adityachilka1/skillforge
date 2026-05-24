@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, and `format` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, and `inspect` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -125,6 +125,46 @@ skillforge format ./code-review/SKILL.md --write=false
 ```
 
 Fenced code blocks (` ``` `) are preserved verbatim — `format` is gentle on the body, never reflowing prose. The output is always validated against the schema before writing; an already-canonical file is a no-op (`exit 0`, no write). Format is idempotent: running twice produces byte-identical output the second time.
+
+### `skillforge inspect <path>`
+
+One-shot diagnostic report — rolls `validate` + `lint` + a frontmatter summary + body stats + (for directory inputs) the attached-file inventory into one structured view. The "give me everything you know about this skill" command:
+
+```bash
+skillforge inspect ./code-review
+# code-review  /…/SKILL.md  ISSUES
+#
+# FRONTMATTER
+#   name         code-review
+#   description  Use this when the user asks for a code review on a diff…
+#   version      0.1.0
+#   tags         code, review
+#
+# BODY
+#    42  lines
+#   210  words
+#  1832  characters
+#     4  sections
+#   headings:
+#     · What this skill does
+#     · When to use
+#     · Examples
+#
+# VALIDATION
+#   ✓ no issues
+#
+# LINT
+#   · warning …/SKILL.md: tags-empty: tags array is empty…
+#
+# ATTACHED FILES
+#   · SKILL.md
+#   · templates/letter.md
+#
+# SUMMARY
+#   ✗ validation: 0  lint: 1
+```
+
+Pass `--json` for machine-readable output (CI-friendly — every field is JSON-stable). Exit `0` if validation passes and there are no lint errors, `1` otherwise. Reuses `pack`'s exclusion rules so the attached-file list matches exactly what `pack` would bundle.
 
 ## Schema
 

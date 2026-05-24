@@ -2,6 +2,13 @@
 export { type FormatOptions, type FormatResult, formatSkill } from "./format.js";
 export { initSkill, type InitOptions } from "./init.js";
 export {
+  type InspectBodyStats,
+  type InspectOptions,
+  type InspectResult,
+  type InspectSummary,
+  inspectSkill,
+} from "./inspect.js";
+export {
   computeExitCode,
   type Issue,
   lintSkill,
