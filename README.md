@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, and `inspect` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, and `diff` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -165,6 +165,28 @@ skillforge inspect ./code-review
 ```
 
 Pass `--json` for machine-readable output (CI-friendly — every field is JSON-stable). Exit `0` if validation passes and there are no lint errors, `1` otherwise. Reuses `pack`'s exclusion rules so the attached-file list matches exactly what `pack` would bundle.
+
+### `skillforge diff <a> <b>`
+
+Structural comparison of two `SKILL.md` files. A plain `diff` is noisy — a reordered heading or a one-word frontmatter change drowns in re-wrapped paragraphs. `skillforge diff` pulls the structural signal out: which frontmatter fields changed, which `##` / `###` sections were added, removed, or reordered, and a coarse body line-count delta.
+
+```bash
+skillforge diff ./code-review-v1/SKILL.md ./code-review-v2/SKILL.md
+# diff …v1/SKILL.md → …v2/SKILL.md
+#   frontmatter: 1  headings: 2  body lines: +6 -3
+#
+# FRONTMATTER
+#   ~ version: 0.1.0 → 0.2.0
+#
+# HEADINGS
+#   + Examples
+#   ~ When to use it  (position 1 → 2)
+#
+# BODY
+#   +6  -3  lines (coarse)
+```
+
+Pass `--json` for machine-readable output. Exit `0` if the files are structurally identical, `1` if they differ (mirrors `mcp-devtools diff`), `2` on validation or IO error. Both files must validate against the schema — broken frontmatter is refused so the structural view stays trustworthy.
 
 ## Schema
 
