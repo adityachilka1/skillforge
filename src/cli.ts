@@ -12,9 +12,11 @@
  *   inspect <path>  one-shot report: validation + lint + frontmatter + body
  *   diff <a> <b>    structural comparison of two SKILL.md files
  *   tree <dir>      preview the file inventory pack would produce
+ *   cat <skill>     print the bundled SKILL.md of a .skill archive
  */
 import { cac } from "cac";
 import kleur from "kleur";
+import { type CatSection, catSkill } from "./cat.js";
 import { type DiffResult, diffSkills } from "./diff.js";
 import { formatSkill } from "./format.js";
 import { initSkill } from "./init.js";
@@ -555,6 +557,49 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
+
+cli
+  .command("cat <skill>", "Print the bundled SKILL.md of a .skill archive (or a SKILL.md / dir)")
+  .option("--section <name>", "Slice to print: frontmatter, body, or all (default: all)")
+  .option("--json", "Emit { name, version, frontmatter, body } as JSON instead of raw text")
+  .action(async (skill: string, opts) => {
+    try {
+      const section = opts.section as CatSection | undefined;
+      if (section !== undefined && !["frontmatter", "body", "all"].includes(section)) {
+        throw new Error(`--section must be one of frontmatter, body, all (got "${section}")`);
+      }
+      // For `--json` we always need both halves of the SKILL.md (frontmatter
+      // *and* body), regardless of which `--section` slice the user
+      // requested. Call once for each rather than reading the file twice.
+      if (opts.json) {
+        const fm = await catSkill({ path: skill, section: "frontmatter" });
+        const body = await catSkill({ path: skill, section: "body" });
+        process.stdout.write(
+          `${JSON.stringify(
+            { name: fm.name, version: fm.version, frontmatter: fm.content, body: body.content },
+            null,
+            2,
+          )}\n`,
+        );
+        process.exit(0);
+      }
+      const result = await catSkill({ path: skill, section: section ?? "all" });
+      // Default text mode: print the requested slice exactly as it sits in
+      // the file. Log/diagnostic noise stays on stderr so the output can
+      // be safely piped (e.g. `skillforge cat foo.skill | wc -l`).
+      process.stdout.write(result.content);
+      if (!result.content.endsWith("\n")) {
+        // A SKILL.md without a trailing newline is unusual but possible —
+        // append one for terminal-friendliness without polluting the
+        // returned bytes, which the library already exposes verbatim.
+        process.stdout.write("\n");
+      }
+      process.exit(0);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  });
 
 cli.help();
 cli.version(VERSION);
