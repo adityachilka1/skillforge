@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, `diff`, and `tree` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, `diff`, `tree`, and `cat` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -204,6 +204,34 @@ skillforge tree ./code-review
 ```
 
 Pass `--json` for machine-readable output. Pass `--sort size` to see files in descending byte-size order (useful for spotting heavy fixtures); `--sort path` is the default. Side-effect free — `tree` never writes.
+
+### `skillforge cat <skill>`
+
+Print the bundled `SKILL.md` of a `.skill` archive to stdout — like `tar -xOf` for skill bundles, but with frontmatter validation and section slicing. Accepts a `.skill` archive, a `SKILL.md` file, or a directory containing one:
+
+```bash
+skillforge cat ./code-review.skill
+# ---
+# name: code-review
+# description: …
+# ---
+#
+# # code-review body…
+
+skillforge cat ./code-review.skill --section frontmatter
+# name: code-review
+# description: …
+# version: 0.1.0
+# tags: [code, review]
+
+skillforge cat ./code-review.skill --section body
+# # code-review body…
+
+skillforge cat ./code-review.skill --json
+# { "name": "code-review", "version": "0.1.0", "frontmatter": "…", "body": "…" }
+```
+
+Validates frontmatter against the schema before emitting — a broken `.skill` is refused with a clear error rather than printing garbage. Default behaviour prints the raw bytes; `--section frontmatter` returns just the YAML (no `---` fences), `--section body` returns the markdown body. Pass `--json` for a structured `{ name, version, frontmatter, body }` payload. Side-effect free — `cat` never extracts other files or writes to disk.
 
 ## Schema
 

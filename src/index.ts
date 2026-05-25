@@ -1,4 +1,5 @@
 /** Public programmatic API. */
+export { type CatOptions, type CatResult, type CatSection, catSkill } from "./cat.js";
 export {
   type BodyHeadingsDiff,
   type BodyLinesDelta,
