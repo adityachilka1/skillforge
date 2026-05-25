@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, and `diff` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, `diff`, and `tree` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -187,6 +187,23 @@ skillforge diff ./code-review-v1/SKILL.md ./code-review-v2/SKILL.md
 ```
 
 Pass `--json` for machine-readable output. Exit `0` if the files are structurally identical, `1` if they differ (mirrors `mcp-devtools diff`), `2` on validation or IO error. Both files must validate against the schema — broken frontmatter is refused so the structural view stays trustworthy.
+
+### `skillforge tree <dir>`
+
+Preview what files `pack` would include in a `.skill` bundle without actually building the archive. Walks the directory with the *same* exclusion rules `pack` uses (`.git`, `node_modules`, hidden files, `*.log`) and prints a tidy box-drawing tree with per-file sizes:
+
+```bash
+skillforge tree ./code-review
+# /…/code-review
+# ├──   312 B  SKILL.md
+# ├──            templates/
+# │   └──   24 B  letter.md
+# └──   12 B  tool.py
+#
+# 3 files · 348 B
+```
+
+Pass `--json` for machine-readable output. Pass `--sort size` to see files in descending byte-size order (useful for spotting heavy fixtures); `--sort path` is the default. Side-effect free — `tree` never writes.
 
 ## Schema
 

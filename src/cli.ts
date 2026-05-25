@@ -11,6 +11,7 @@
  *   format <path>   reformat a SKILL.md to canonical shape
  *   inspect <path>  one-shot report: validation + lint + frontmatter + body
  *   diff <a> <b>    structural comparison of two SKILL.md files
+ *   tree <dir>      preview the file inventory pack would produce
  */
 import { cac } from "cac";
 import kleur from "kleur";
@@ -21,6 +22,7 @@ import { type InspectResult, inspectSkill } from "./inspect.js";
 import { installSkill } from "./install.js";
 import { computeExitCode, lintSkill } from "./lint.js";
 import { packSkill } from "./pack.js";
+import { type TreeResult, treeSkill } from "./tree.js";
 import { type BumpKind, updateSkillVersion } from "./update.js";
 import { validateSkill } from "./validate.js";
 
@@ -452,6 +454,106 @@ function formatValue(v: unknown): string {
   }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
+}
+
+cli
+  .command("tree <dir>", "Preview the file inventory that pack would produce")
+  .option("--json", "Emit the full result as JSON (machine-readable)")
+  .option("--sort <mode>", "Sort entries by `path` (default) or `size`")
+  .action(async (dir: string, opts) => {
+    try {
+      const sort = opts.sort;
+      if (sort !== undefined && sort !== "path" && sort !== "size") {
+        throw new Error(`--sort must be one of path, size (got "${sort}")`);
+      }
+      const result = await treeSkill({ srcDir: dir, sort });
+      if (opts.json) {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        process.exit(0);
+      }
+      printTreeReport(result);
+      process.exit(0);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * Human-readable `tree` report. Box-drawing characters render the
+ * hierarchy; sizes are right-padded in a fixed column so the eye can
+ * scan them as a tabular-nums column. Sentence-case heading on the
+ * directory header, lowercase totals — quiet structural signal.
+ *
+ * The tree drawing uses a per-level "is-last-at-this-level" stack so
+ * the connector characters render correctly even for deep nesting. We
+ * derive the structure from the already-walked entries rather than
+ * re-walking the filesystem: path-sort returns entries in tree order
+ * already.
+ */
+function printTreeReport(r: TreeResult): void {
+  const out = process.stdout;
+  out.write(`${kleur.bold(r.srcDir)}\n`);
+
+  // Group entries by parent path so we know which is last in each group —
+  // that determines whether to draw `├──` or `└──`.
+  const childrenByParent = new Map<string, string[]>();
+  for (const e of r.entries) {
+    const parent = e.path.includes("/") ? e.path.slice(0, e.path.lastIndexOf("/")) : "";
+    const arr = childrenByParent.get(parent) ?? [];
+    arr.push(e.path);
+    childrenByParent.set(parent, arr);
+  }
+  const entryByPath = new Map(r.entries.map((e) => [e.path, e]));
+
+  // Compute the max size-label width so right-aligned columns line up.
+  const labels = r.entries.filter((e) => !e.isDir).map((e) => formatSize(e.size));
+  const sizeWidth = labels.length === 0 ? 0 : Math.max(...labels.map((l) => l.length));
+
+  // Walk recursively from the root using path-sort children.
+  const drawn = new Set<string>();
+  const drawNode = (path: string, prefix: string, isLast: boolean): void => {
+    const connector = isLast ? "└── " : "├── ";
+    const entry = entryByPath.get(path);
+    if (!entry) return;
+    const name = path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path;
+    const sizeLabel = entry.isDir
+      ? " ".repeat(sizeWidth)
+      : formatSize(entry.size).padStart(sizeWidth, " ");
+    const display = entry.isDir ? kleur.cyan(`${name}/`) : name;
+    out.write(`${prefix}${connector}${kleur.dim(sizeLabel)}  ${display}\n`);
+    drawn.add(path);
+
+    if (entry.isDir) {
+      const kids = childrenByParent.get(path) ?? [];
+      for (let i = 0; i < kids.length; i += 1) {
+        const nextPrefix = prefix + (isLast ? "    " : "│   ");
+        drawNode(kids[i], nextPrefix, i === kids.length - 1);
+      }
+    }
+  };
+
+  const roots = childrenByParent.get("") ?? [];
+  for (let i = 0; i < roots.length; i += 1) {
+    drawNode(roots[i], "", i === roots.length - 1);
+  }
+
+  // Tabular-style totals — files count + total size in human units. Dot
+  // separator matches the rest of the CLI's "summary" lines.
+  const totalLabel = `${r.totalFiles} file${r.totalFiles === 1 ? "" : "s"} · ${formatSize(
+    r.totalBytes,
+  )}`;
+  out.write(`\n${kleur.dim(totalLabel)}\n`);
+}
+
+/**
+ * Render a byte count as either bytes (< 1 KB) or KB with one decimal.
+ * Returned without a leading space so callers can right-pad to a fixed
+ * width for tabular-nums alignment.
+ */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 cli.help();
