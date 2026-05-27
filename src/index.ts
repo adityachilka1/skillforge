@@ -26,6 +26,12 @@ export {
   type LintResult,
   type Severity,
 } from "./lint.js";
+export {
+  type InstalledSkill,
+  listInstalledSkills,
+  type LsOptions,
+  type LsResult,
+} from "./ls.js";
 export { SkillFrontmatterSchema, type SkillFrontmatter } from "./schema.js";
 export { type TreeEntry, type TreeOptions, type TreeResult, treeSkill } from "./tree.js";
 export {

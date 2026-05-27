@@ -13,6 +13,7 @@
  *   diff <a> <b>    structural comparison of two SKILL.md files
  *   tree <dir>      preview the file inventory pack would produce
  *   cat <skill>     print the bundled SKILL.md of a .skill archive
+ *   ls              list installed skills in ~/.claude/skills/
  */
 import { cac } from "cac";
 import kleur from "kleur";
@@ -23,6 +24,7 @@ import { initSkill } from "./init.js";
 import { type InspectResult, inspectSkill } from "./inspect.js";
 import { installSkill } from "./install.js";
 import { computeExitCode, lintSkill } from "./lint.js";
+import { type InstalledSkill, listInstalledSkills } from "./ls.js";
 import { packSkill } from "./pack.js";
 import { type TreeResult, treeSkill } from "./tree.js";
 import { type BumpKind, updateSkillVersion } from "./update.js";
@@ -615,6 +617,64 @@ cli
       process.exit(1);
     }
   });
+
+cli
+  .command("ls", "List installed skills (default: ~/.claude/skills)")
+  .option("--from <dir>", "Scan a different skills directory")
+  .option("--include-invalid", "Include skill dirs whose SKILL.md fails validation")
+  .option("--json", "Emit the full LsResult as JSON (machine-readable)")
+  .action(async (opts) => {
+    try {
+      const result = await listInstalledSkills({
+        fromDir: opts.from,
+        includeInvalid: !!opts.includeInvalid,
+      });
+      if (opts.json) {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        process.exit(0);
+      }
+      printLsReport(result);
+      process.exit(0);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  });
+
+/**
+ * Human-readable `ls` report. Tidy 3-column table: name, version, path.
+ * Tabular-nums alignment via right-padded columns; sentence-case heading
+ * in tracked uppercase — quiet structural signal, not editorial shouting.
+ * Empty-state message names the scanned directory so the reader knows
+ * which tree came up empty.
+ */
+function printLsReport(r: { fromDir: string; count: number; skills: InstalledSkill[] }): void {
+  const out = process.stdout;
+  if (r.count === 0) {
+    out.write(`${kleur.dim(`No skills installed in ${r.fromDir}`)}\n`);
+    return;
+  }
+  // Column widths sized to actual content so narrow trees stay compact and
+  // long names still align. Header row joins the alignment too.
+  const headers = { name: "Name", version: "Version", path: "Path" };
+  const nameWidth = Math.max(headers.name.length, ...r.skills.map((s) => s.name.length));
+  const versionWidth = Math.max(headers.version.length, ...r.skills.map((s) => s.version.length));
+
+  out.write(`${kleur.bold(kleur.dim("INSTALLED SKILLS"))}  ${kleur.dim(`(${r.fromDir})`)}\n\n`);
+  out.write(
+    `${kleur.dim(headers.name.padEnd(nameWidth))}  ${kleur.dim(headers.version.padEnd(versionWidth))}  ${kleur.dim(headers.path)}\n`,
+  );
+  for (const s of r.skills) {
+    // Invalid skills get a dim row + a trailing tag so the reader can tell
+    // them apart at a glance without breaking column alignment.
+    const tag = s.valid ? "" : `  ${kleur.yellow("(invalid)")}`;
+    const colorize = s.valid ? (x: string) => x : kleur.dim;
+    out.write(
+      `${colorize(s.name.padEnd(nameWidth))}  ${colorize(s.version.padEnd(versionWidth))}  ${kleur.dim(s.path)}${tag}\n`,
+    );
+  }
+  out.write(`\n${kleur.dim(`${r.count} skill${r.count === 1 ? "" : "s"} installed`)}\n`);
+}
 
 cli.help();
 cli.version(VERSION);
