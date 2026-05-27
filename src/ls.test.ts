@@ -176,7 +176,8 @@ describe("listInstalledSkills — default fromDir", () => {
     // touching their machine state, so we just confirm the function resolves
     // and reports the default path.
     const result = await listInstalledSkills();
-    expect(result.fromDir).toMatch(/\.claude\/skills$/);
+    // Cross-platform: macOS / Linux use `/`, Windows uses `\` — match either.
+    expect(result.fromDir).toMatch(/\.claude[\\/]skills$/);
     expect(Array.isArray(result.skills)).toBe(true);
     expect(result.count).toBe(result.skills.length);
   });
