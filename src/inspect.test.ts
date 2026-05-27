@@ -2,8 +2,10 @@ import { realpathSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import JSZip from "jszip";
 import { beforeEach, describe, expect, it } from "vitest";
 import { inspectSkill } from "./inspect.js";
+import { packSkill } from "./pack.js";
 
 let workDir: string;
 
@@ -81,6 +83,7 @@ describe("inspectSkill — happy path", () => {
     expect(r.summary.ok).toBe(true);
     expect(r.summary.validationIssues).toBe(0);
     expect(r.attachedFiles).toBeUndefined(); // file input → no inventory
+    expect(r.source).toBe("file");
   });
 });
 
@@ -150,6 +153,7 @@ describe("inspectSkill — directory mode", () => {
     expect(r.attachedFiles).not.toContain(".DS_Store");
     expect(r.attachedFiles).not.toContain("debug.log");
     expect(r.attachedFiles?.some((p) => p.startsWith(".git"))).toBe(false);
+    expect(r.source).toBe("directory");
   });
 });
 
@@ -234,8 +238,9 @@ describe("inspectSkill — JSON shape stability", () => {
     // inputs and JSON.stringify drops `undefined` — assert via the source
     // object instead.
     expect(Object.keys(parsed).sort()).toEqual(
-      ["body", "frontmatter", "lint", "name", "path", "summary", "validation"].sort(),
+      ["body", "frontmatter", "lint", "name", "path", "source", "summary", "validation"].sort(),
     );
+    expect(parsed.source).toBe("file");
     const summary = parsed.summary as Record<string, unknown>;
     expect(summary).toMatchObject({
       ok: expect.any(Boolean),
@@ -249,5 +254,99 @@ describe("inspectSkill — JSON shape stability", () => {
       words: expect.any(Number),
       sections: expect.any(Array),
     });
+  });
+});
+
+/**
+ * Helper: pack a skill directory into a `.skill` archive via the real
+ * packer so the fixture archives match what `pack` actually emits — same
+ * compression, same root layout. Lives next to the archive-mode tests
+ * because that's the only block that needs it.
+ */
+async function packIntoArchive(skillDir: string, archiveName: string): Promise<string> {
+  const outPath = join(workDir, `${archiveName}.skill`);
+  await packSkill({ srcDir: skillDir, outPath });
+  return outPath;
+}
+
+describe("inspectSkill — archive mode", () => {
+  it("reads SKILL.md from a packed .skill archive and produces a clean report", async () => {
+    const skillDir = join(workDir, "my-skill");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), buildSkillSource());
+    const archive = await packIntoArchive(skillDir, "my-skill");
+
+    const r = await inspectSkill({ path: archive });
+    expect(r.source).toBe("archive");
+    expect(r.name).toBe("my-skill");
+    expect(r.frontmatter?.version).toBe("0.1.0");
+    expect(r.validation.ok).toBe(true);
+    expect(r.summary.ok).toBe(true);
+    // No attached-file inventory for archives — the bundle is opaque; the
+    // user can use `tree`/`install --dry-run` to peek at its file list.
+    expect(r.attachedFiles).toBeUndefined();
+    // The reported path is the archive itself, not the temp file we
+    // materialized SKILL.md to during inspection.
+    expect(r.path.endsWith("my-skill.skill")).toBe(true);
+  });
+
+  it("surfaces frontmatter validation issues from inside a .skill archive without crashing", async () => {
+    const skillDir = join(workDir, "broken-skill");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), buildSkillSource({ description: "too short" }));
+    // pack would normally refuse a broken skill — `--skip-validation` lets
+    // us produce a malformed archive specifically so `inspect` can prove
+    // it surfaces the validation failure cleanly rather than throwing.
+    const outPath = join(workDir, "broken-skill.skill");
+    await packSkill({ srcDir: skillDir, outPath, skipValidation: true });
+
+    const r = await inspectSkill({ path: outPath });
+    expect(r.source).toBe("archive");
+    expect(r.validation.ok).toBe(false);
+    expect(r.summary.ok).toBe(false);
+    expect(r.summary.validationIssues).toBeGreaterThan(0);
+    expect(r.frontmatter).toBeUndefined();
+  });
+
+  it("refuses an archive that has no SKILL.md at the root with a clear error", async () => {
+    // Construct a zip directly — `pack` won't emit a SKILL.md-less archive,
+    // so we build a hand-rolled fixture that matches what a malicious or
+    // misconfigured bundle would look like.
+    const zip = new JSZip();
+    zip.file("README.md", "no skill here");
+    const buf = await zip.generateAsync({ type: "nodebuffer" });
+    const archive = join(workDir, "no-skill.skill");
+    await writeFile(archive, buf);
+
+    await expect(inspectSkill({ path: archive })).rejects.toThrow(/SKILL\.md/);
+  });
+
+  it("forces archive interpretation via --from-bundle on a misnamed file", async () => {
+    const skillDir = join(workDir, "renamed");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), buildSkillSource());
+    // Pack to a `.skill`, then move it to a `.bundle` extension to simulate
+    // a user who renamed the artifact. Without --from-bundle the loader
+    // would try to read it as plain text and explode on the binary bytes;
+    // with the flag it sniffs zip magic and treats it as an archive.
+    const packed = await packIntoArchive(skillDir, "renamed");
+    const renamed = join(workDir, "renamed.bundle");
+    const { rename } = await import("node:fs/promises");
+    await rename(packed, renamed);
+
+    const r = await inspectSkill({ path: renamed, fromBundle: true });
+    expect(r.source).toBe("archive");
+    expect(r.name).toBe("my-skill");
+    expect(r.summary.ok).toBe(true);
+  });
+
+  it("refuses --from-bundle on a plain text file with a zip-magic sniff", async () => {
+    // A SKILL.md as text — `--from-bundle` should reject this before JSZip
+    // ever sees the bytes, because the first 4 bytes aren't `PK\x03\x04`.
+    const file = join(workDir, "plain.skill");
+    await writeFile(file, buildSkillSource());
+    await expect(inspectSkill({ path: file, fromBundle: true })).rejects.toThrow(
+      /not a zip|zip parse failed/,
+    );
   });
 });
