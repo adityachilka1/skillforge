@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, `diff`, `tree`, and `cat` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, `diff`, `tree`, `cat`, and `ls` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -245,6 +245,33 @@ skillforge cat ./code-review.skill --json
 
 Validates frontmatter against the schema before emitting — a broken `.skill` is refused with a clear error rather than printing garbage. Default behaviour prints the raw bytes; `--section frontmatter` returns just the YAML (no `---` fences), `--section body` returns the markdown body. Pass `--json` for a structured `{ name, version, frontmatter, body }` payload. Side-effect free — `cat` never extracts other files or writes to disk.
 
+### `skillforge ls`
+
+List installed skills in `~/.claude/skills/` (the default `install` target) — the `npm ls` analogue for the Claude skills tree:
+
+```bash
+skillforge ls
+# INSTALLED SKILLS  (/Users/you/.claude/skills)
+#
+# Name         Version     Path
+# alpha-skill  0.2.1       /Users/you/.claude/skills/alpha-skill
+# code-review  1.0.0       /Users/you/.claude/skills/code-review
+# zebra-skill  3.0.0-beta  /Users/you/.claude/skills/zebra-skill
+#
+# 3 skills installed
+
+skillforge ls --from ./local-skills
+# scan a different tree (CI fixtures, sandbox testing)
+
+skillforge ls --include-invalid
+# include skill dirs whose SKILL.md fails validation, tagged `(invalid)`
+
+skillforge ls --json | jq '.skills[] | .name'
+# machine-readable output for shell pipelines
+```
+
+Read-only directory scan — `ls` never fetches, never writes. A missing `~/.claude/skills/` returns an empty result with exit 0 (a fresh machine is not an error); a `--from` path that points at a file rather than a directory is a hard error. Loose files and skill-less subdirectories are skipped silently — a half-pulled install shouldn't pollute every `ls` invocation. Results are sorted by name ascending so the output is stable across platforms.
+
 ## Schema
 
 ```yaml
@@ -267,7 +294,7 @@ Unknown frontmatter fields are preserved (forward-compatible with whatever Anthr
 ## Roadmap
 
 - **v0.0.1** — `init`, `validate` ✓
-- **v0.0.2** — `pack`, `install` ✓ (this release)
+- **v0.0.2** — `pack`, `install`, `ls` ✓ (this release)
 - **v0.1** — `publish` to the skillforge.dev registry, eval suite, `install` from registry
 - **v0.2** — MCP-compatible installer so any MCP client can install skills from the registry
 
