@@ -241,9 +241,17 @@ cli
     "One-shot report: validation + lint + frontmatter summary + body stats",
   )
   .option("--json", "Emit the full result as JSON (CI-friendly)")
+  .option(
+    "--from-bundle",
+    "Force archive interpretation regardless of extension (sniffs zip magic)",
+  )
   .action(async (path: string, opts) => {
     try {
-      const result = await inspectSkill({ path, json: !!opts.json });
+      const result = await inspectSkill({
+        path,
+        json: !!opts.json,
+        fromBundle: !!opts.fromBundle,
+      });
       if (opts.json) {
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
         process.exit(result.summary.ok ? 0 : 1);
@@ -268,7 +276,14 @@ function printInspectReport(r: InspectResult): void {
   const status = r.summary.ok ? kleur.green("OK") : kleur.red("ISSUES");
   const heading = (label: string) => out.write(`\n${kleur.bold(kleur.dim(label.toUpperCase()))}\n`);
 
-  out.write(`${kleur.bold(r.name ?? "<unparsed>")}  ${kleur.dim(r.path)}  ${status}\n`);
+  // Source line goes first so the reader knows immediately whether they're
+  // looking at a bundle (opaque archive contents), a directory (on-disk
+  // skill folder), or a bare SKILL.md. Capitalized kind so it reads as a
+  // label rather than a code identifier.
+  const sourceLabel =
+    r.source === "archive" ? "Archive" : r.source === "directory" ? "Directory" : "File";
+  out.write(`${kleur.dim(`${sourceLabel}:`)} ${r.path}\n`);
+  out.write(`${kleur.bold(r.name ?? "<unparsed>")}  ${status}\n`);
 
   heading("Frontmatter");
   if (r.frontmatter) {

@@ -128,11 +128,12 @@ Fenced code blocks (` ``` `) are preserved verbatim — `format` is gentle on th
 
 ### `skillforge inspect <path>`
 
-One-shot diagnostic report — rolls `validate` + `lint` + a frontmatter summary + body stats + (for directory inputs) the attached-file inventory into one structured view. The "give me everything you know about this skill" command:
+One-shot diagnostic report — rolls `validate` + `lint` + a frontmatter summary + body stats + (for directory inputs) the attached-file inventory into one structured view. The "give me everything you know about this skill" command. Accepts a `.skill` archive, a directory containing a `SKILL.md`, or a `SKILL.md` file directly — same recognition rule as `cat` and `install`:
 
 ```bash
 skillforge inspect ./code-review
-# code-review  /…/SKILL.md  ISSUES
+# Directory: /…/SKILL.md
+# code-review  ISSUES
 #
 # FRONTMATTER
 #   name         code-review
@@ -162,7 +163,18 @@ skillforge inspect ./code-review
 #
 # SUMMARY
 #   ✗ validation: 0  lint: 1
+
+# Inspect a packed bundle without extracting anything
+skillforge inspect ./code-review.skill
+# Archive: /…/code-review.skill
+# code-review  OK
+# …
+
+# Force archive mode against a renamed bundle (sniffs zip magic)
+skillforge inspect ./code-review.bundle --from-bundle
 ```
+
+The first line of the report shows the source — `Archive: …`, `Directory: …`, or `File: …` — so you can tell which mode `inspect` is in at a glance. Archive mode opens the `.skill` in memory, materializes `SKILL.md` to a one-off temp file just long enough to run `validate` / `lint` against it, then cleans up; no other archive entries are extracted. The attached-file inventory is intentionally directory-only (a bundle is opaque — use `tree` or `install --dry-run` to peek at its file list).
 
 Pass `--json` for machine-readable output (CI-friendly — every field is JSON-stable). Exit `0` if validation passes and there are no lint errors, `1` otherwise. Reuses `pack`'s exclusion rules so the attached-file list matches exactly what `pack` would bundle.
 
