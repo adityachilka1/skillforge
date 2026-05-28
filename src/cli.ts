@@ -14,6 +14,7 @@
  *   tree <dir>      preview the file inventory pack would produce
  *   cat <skill>     print the bundled SKILL.md of a .skill archive
  *   ls              list installed skills in ~/.claude/skills/
+ *   uninstall <name> remove an installed skill from ~/.claude/skills/
  */
 import { cac } from "cac";
 import kleur from "kleur";
@@ -27,6 +28,7 @@ import { computeExitCode, lintSkill } from "./lint.js";
 import { type InstalledSkill, listInstalledSkills } from "./ls.js";
 import { packSkill } from "./pack.js";
 import { type TreeResult, treeSkill } from "./tree.js";
+import { uninstallSkill } from "./uninstall.js";
 import { type BumpKind, updateSkillVersion } from "./update.js";
 import { validateSkill } from "./validate.js";
 
@@ -674,6 +676,90 @@ function printLsReport(r: { fromDir: string; count: number; skills: InstalledSki
     );
   }
   out.write(`\n${kleur.dim(`${r.count} skill${r.count === 1 ? "" : "s"} installed`)}\n`);
+}
+
+cli
+  .command("uninstall <name>", "Remove an installed skill from ~/.claude/skills/")
+  .option("--from <dir>", "Scan a different skills directory")
+  .option("--force", "Skip the interactive confirmation prompt")
+  .option("--dry-run", "Report what would be deleted without touching disk")
+  .action(async (name: string, opts) => {
+    try {
+      // First: a dry-run walk so we can both (a) tell the user how big
+      // the about-to-be-removed dir is in the prompt, and (b) bail with a
+      // clear "not installed" message before asking anything.
+      const preview = await uninstallSkill({
+        name,
+        fromDir: opts.from,
+        dryRun: true,
+      });
+
+      if (opts.dryRun) {
+        const sizeKb = (preview.bytesFreed / 1024).toFixed(1);
+        process.stdout.write(
+          `${kleur.yellow("dry-run")} would remove ${preview.path} (${preview.fileCount} file${
+            preview.fileCount === 1 ? "" : "s"
+          }, ${sizeKb} KB) — nothing written\n`,
+        );
+        process.exit(0);
+      }
+
+      if (!opts.force) {
+        const sizeKb = (preview.bytesFreed / 1024).toFixed(1);
+        const prompt = `remove ${preview.path} (${preview.fileCount} file${
+          preview.fileCount === 1 ? "" : "s"
+        }, ${sizeKb} KB freed)? [y/N] `;
+        const answer = (await readYesNo(prompt)).trim().toLowerCase();
+        if (answer !== "y" && answer !== "yes") {
+          process.stdout.write(`${kleur.dim("aborted — no changes made")}\n`);
+          process.exit(1);
+        }
+      }
+
+      const result = await uninstallSkill({
+        name,
+        fromDir: opts.from,
+        force: !!opts.force,
+      });
+      const sizeKb = (result.bytesFreed / 1024).toFixed(1);
+      process.stdout.write(
+        `${kleur.green("✓")} removed ${result.path} (${result.fileCount} file${
+          result.fileCount === 1 ? "" : "s"
+        }, ${sizeKb} KB freed)\n`,
+      );
+      process.exit(0);
+    } catch (err) {
+      const msg = (err as Error).message;
+      process.stderr.write(`${kleur.red("error:")} ${msg}\n`);
+      // Exit-code semantics:
+      //   2 — path-safety / argument validity error (zip-slip-style refusal,
+      //       traversal, separator, empty name, non-directory at target).
+      //   1 — target not found, or any other runtime failure (user aborted
+      //       is already handled above with exit(1)).
+      // Pattern-match on the prefix the library emits so CI scripts can
+      // distinguish "you asked for nonsense" from "the thing wasn't there".
+      const isPathSafety =
+        /path-traversal|outside the install root|invalid skill name|name must be a single path segment|not a directory|name is required/i.test(
+          msg,
+        );
+      process.exit(isPathSafety ? 2 : 1);
+    }
+  });
+
+/**
+ * Prompt the user for a yes/no answer on stdin. We read one line via the
+ * `readline` core module — no new deps, behaves correctly under piped /
+ * non-TTY input (CI scripts that pipe `echo y |` get the expected answer).
+ */
+async function readYesNo(prompt: string): Promise<string> {
+  const { createInterface } = await import("node:readline");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
 }
 
 cli.help();

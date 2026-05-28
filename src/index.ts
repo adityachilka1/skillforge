@@ -35,6 +35,11 @@ export {
 export { SkillFrontmatterSchema, type SkillFrontmatter } from "./schema.js";
 export { type TreeEntry, type TreeOptions, type TreeResult, treeSkill } from "./tree.js";
 export {
+  type UninstallOptions,
+  type UninstallResult,
+  uninstallSkill,
+} from "./uninstall.js";
+export {
   type BumpKind,
   bumpVersion,
   type UpdateOptions,

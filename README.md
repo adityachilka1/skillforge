@@ -13,7 +13,7 @@ Scaffold, validate, and lint `SKILL.md` files for the agent ecosystem.
 
 ---
 
-> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, `diff`, `tree`, `cat`, and `ls` work today. Registry, publish, and eval flows land in v0.1.
+> **Status — v0.0.2, early days.** `init`, `validate`, `lint`, `pack`, `install`, `update`, `format`, `inspect`, `diff`, `tree`, `cat`, `ls`, and `uninstall` work today. Registry, publish, and eval flows land in v0.1.
 
 ## Install
 
@@ -271,6 +271,28 @@ skillforge ls --json | jq '.skills[] | .name'
 ```
 
 Read-only directory scan — `ls` never fetches, never writes. A missing `~/.claude/skills/` returns an empty result with exit 0 (a fresh machine is not an error); a `--from` path that points at a file rather than a directory is a hard error. Loose files and skill-less subdirectories are skipped silently — a half-pulled install shouldn't pollute every `ls` invocation. Results are sorted by name ascending so the output is stable across platforms.
+
+### `skillforge uninstall <name>`
+
+Remove an installed skill from `~/.claude/skills/` — the counterpart to `install`. Names a single skill (not a path); refuses anything that contains a path separator or `..` traversal segment so a typo can never escape the install root:
+
+```bash
+skillforge uninstall code-review
+# remove /Users/you/.claude/skills/code-review (4 files, 3.2 KB freed)? [y/N] y
+# ✓ removed /Users/you/.claude/skills/code-review (4 files, 3.2 KB freed)
+
+skillforge uninstall code-review --force
+# ✓ removed /Users/you/.claude/skills/code-review (4 files, 3.2 KB freed)
+#   skips the prompt — handy for CI / scripts
+
+skillforge uninstall code-review --dry-run
+# dry-run would remove /Users/you/.claude/skills/code-review (4 files, 3.2 KB) — nothing written
+
+skillforge uninstall code-review --from ./local-skills
+# operate on an alt-tree (CI fixtures, sandbox testing)
+```
+
+Without `--force`, prints the resolved path + the size that would be reclaimed, then asks `[y/N]` on stdin — saying anything other than `y`/`yes` aborts with exit 1 and writes nothing. `--dry-run` walks the tree to compute `bytesFreed` / `fileCount` and returns without touching disk. Exit codes: `0` on success, `1` on user-aborted / target-not-found, `2` on path-safety errors (traversal, separator in name, non-directory at target, empty name).
 
 ## Schema
 
