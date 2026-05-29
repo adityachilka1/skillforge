@@ -31,6 +31,7 @@ import { installSkill } from "./install.js";
 import { computeExitCode, lintSkill } from "./lint.js";
 import { type InstalledSkill, listInstalledSkills } from "./ls.js";
 import { packSkill } from "./pack.js";
+import { type SearchField, type SearchResult, searchInstalledSkills } from "./search.js";
 import { type TreeResult, treeSkill } from "./tree.js";
 import { uninstallSkill } from "./uninstall.js";
 import { type BumpKind, updateSkillVersion } from "./update.js";
@@ -680,6 +681,111 @@ function printLsReport(r: { fromDir: string; count: number; skills: InstalledSki
     );
   }
   out.write(`\n${kleur.dim(`${r.count} skill${r.count === 1 ? "" : "s"} installed`)}\n`);
+}
+
+cli
+  .command("search <query>", "Search installed skills by name, description, tags, or body")
+  .option("--from <dir>", "Scan a different skills directory")
+  .option("--limit <n>", "Cap the number of hits returned (default: 20)")
+  .option("--fields <list>", "Comma-separated subset of name,description,tags,body (default: all)")
+  .option("--json", "Emit the full SearchResult as JSON (machine-readable)")
+  .action(async (query: string, opts) => {
+    try {
+      const fields = parseFieldsOption(opts.fields);
+      const limit = parseLimitOption(opts.limit);
+      const result = await searchInstalledSkills({
+        query,
+        fromDir: opts.from,
+        limit,
+        fields,
+      });
+      if (opts.json) {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        process.exit(result.hits.length > 0 ? 0 : 1);
+      }
+      printSearchReport(result);
+      process.exit(result.hits.length > 0 ? 0 : 1);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(2);
+    }
+  });
+
+/**
+ * Parse the `--fields` CSV down to a typed `SearchField[]`. We refuse
+ * unknown tokens loudly rather than silently dropping them — a typo like
+ * `--fields desription` should fail fast, not score zero hits forever.
+ */
+function parseFieldsOption(raw: unknown): SearchField[] | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || raw.trim() === "") {
+    throw new Error("--fields requires a non-empty comma-separated list");
+  }
+  const allowed: SearchField[] = ["name", "description", "tags", "body"];
+  const parts = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: SearchField[] = [];
+  for (const p of parts) {
+    if (!(allowed as string[]).includes(p)) {
+      throw new Error(`--fields: unknown field "${p}" (allowed: ${allowed.join(", ")})`);
+    }
+    out.push(p as SearchField);
+  }
+  if (out.length === 0) {
+    throw new Error("--fields requires a non-empty comma-separated list");
+  }
+  return out;
+}
+
+/**
+ * `--limit` arrives from cac as a number when typeable, a string otherwise.
+ * Coerce + validate so a user typing `--limit foo` gets a clear error.
+ */
+function parseLimitOption(raw: unknown): number | undefined {
+  if (raw === undefined) return undefined;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+    throw new Error(`--limit must be a non-negative integer (got ${JSON.stringify(raw)})`);
+  }
+  return n;
+}
+
+/**
+ * Human-readable `search` report. Ranked list — `score% name @version` per
+ * line, with the top highlight indented and `…`-truncated. Empty-state
+ * message names both the directory and the query so the reader knows
+ * which combination came up dry.
+ */
+function printSearchReport(r: SearchResult): void {
+  const out = process.stdout;
+  if (r.hits.length === 0) {
+    out.write(
+      `${kleur.dim(
+        `No matches for "${r.query}" in ${r.fromDir} (${r.totalScanned} skill${
+          r.totalScanned === 1 ? "" : "s"
+        } scanned)`,
+      )}\n`,
+    );
+    return;
+  }
+
+  out.write(`${kleur.bold(kleur.dim("SEARCH"))}  ${kleur.dim(`"${r.query}" in ${r.fromDir}`)}\n\n`);
+  for (const hit of r.hits) {
+    const pct = `${Math.round(hit.score * 100)}%`.padStart(4);
+    out.write(
+      `${kleur.dim(pct)}  ${kleur.bold(hit.name)} ${kleur.dim(`@${hit.version}`)}  ${kleur.dim(hit.path)}\n`,
+    );
+    for (const h of hit.highlights) {
+      out.write(`        ${kleur.dim(`${h.field}:`)} ${h.snippet}\n`);
+    }
+  }
+  out.write(
+    `\n${kleur.dim(
+      `${r.hits.length} of ${r.totalScanned} skill${r.totalScanned === 1 ? "" : "s"}`,
+    )}\n`,
+  );
 }
 
 cli
