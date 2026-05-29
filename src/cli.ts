@@ -15,9 +15,13 @@
  *   cat <skill>     print the bundled SKILL.md of a .skill archive
  *   ls              list installed skills in ~/.claude/skills/
  *   uninstall <name> remove an installed skill from ~/.claude/skills/
+ *   audit <dir>     fleet security + quality scan across all skills in a dir
  */
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { cac } from "cac";
 import kleur from "kleur";
+import { type AuditReport, type AuditSeverity, auditSkills } from "./audit.js";
 import { type CatSection, catSkill } from "./cat.js";
 import { type DiffResult, diffSkills } from "./diff.js";
 import { formatSkill } from "./format.js";
@@ -760,6 +764,63 @@ async function readYesNo(prompt: string): Promise<string> {
       resolve(answer);
     });
   });
+}
+
+cli
+  .command("audit [dir]", "Fleet security + quality scan across all skills in a directory")
+  .option("--from <dir>", "Override the default ~/.claude/skills/ scan root")
+  .option("--severity <level>", "Only show findings at this severity: error | warning | info")
+  .option("--json", "Emit a single JSON envelope to stdout (no colors, no table)")
+  .action(async (dir: string | undefined, opts) => {
+    const fromDir = opts.from ?? dir ?? join(homedir(), ".claude", "skills");
+    try {
+      const r = await auditSkills({
+        fromDir,
+        severityFilter: opts.severity as AuditSeverity | undefined,
+      });
+      if (opts.json) {
+        process.stdout.write(`${JSON.stringify(r, null, 2)}\n`);
+      } else {
+        process.stdout.write(`${formatAuditReport(r)}\n`);
+      }
+      process.exit(r.summary.error > 0 ? 1 : 0);
+    } catch (err) {
+      process.stderr.write(`${kleur.red("error:")} ${(err as Error).message}\n`);
+      process.exit(2);
+    }
+  });
+
+function formatAuditReport(r: AuditReport): string {
+  const lines: string[] = [];
+  lines.push(kleur.dim(`Scanning ${r.fromDir}`));
+  lines.push(`${r.skillCount} skill${r.skillCount === 1 ? "" : "s"} scanned`);
+  lines.push("");
+  if (r.findings.length === 0) {
+    lines.push(kleur.green("No findings."));
+  } else {
+    for (const name of r.scanned) {
+      const skillFindings = r.findings.filter((f) => f.skillName === name);
+      if (skillFindings.length === 0) continue;
+      lines.push(kleur.bold(name));
+      for (const f of skillFindings) {
+        const sev =
+          f.severity === "error"
+            ? kleur.red("ERROR")
+            : f.severity === "warning"
+              ? kleur.yellow("WARN")
+              : kleur.cyan("INFO");
+        const where = f.filePath ? kleur.dim(` (${f.filePath})`) : "";
+        lines.push(`  ${sev}  ${f.ruleId}  ${f.message}${where}`);
+      }
+    }
+  }
+  lines.push("");
+  lines.push(
+    `Summary: ${kleur.red(`${r.summary.error} error`)} · ` +
+      `${kleur.yellow(`${r.summary.warning} warning`)} · ` +
+      `${kleur.cyan(`${r.summary.info} info`)}`,
+  );
+  return lines.join("\n");
 }
 
 cli.help();
